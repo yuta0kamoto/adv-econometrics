@@ -1,0 +1,10 @@
+---
+title: "Advanced Econometrics"
+author: "Yuta Okamoto"
+---
+
+# Advanced Econometrics
+
+Interactive lecture materials.
+
+-   [Confidence Intervals](confidence-intervals.qmd)
