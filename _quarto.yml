@@ -3,12 +3,6 @@ project:
 
 website:
   title: "Advanced Econometrics"
-  navbar:
-    left:
-      - href: index.qmd
-        text: Home
-      - href: confidence-intervals.qmd
-        text: Confidence Intervals
 
 format:
   html:
