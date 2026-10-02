@@ -3,6 +3,10 @@ project:
 
 website:
   title: "Advanced Econometrics"
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
 
 format:
   html:
