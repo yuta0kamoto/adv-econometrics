@@ -1,0 +1,75 @@
+---
+title: "Advanced Econometrics"
+author: "Yuta Okamoto"
+format: live-html
+engine: knitr
+editor: source
+
+webr:   
+  packages:     
+    - estimatr
+---
+
+{{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
+
+## Confidence Intervals
+
+Confidence intervals (CIs) are interval-valued random variables.
+
+To illustrate this point, let us consider a simple simulation.
+
+The true data-generating process (DGP) is given by
+
+$$
+Y_i = \beta X_i + u_i,\quad u_i \sim \mathcal N(0,1),
+$$
+
+with $\beta=2$ .
+
+We simulate this model below.
+
+```{webr}
+set.seed(1121)
+
+n <- 200 # sample size
+X <- runif(n) # X ~ Unif[0,1]
+u <- rnorm(n) # u ~ Normal(0,1)
+Y <- 2*X + u
+
+ols.res <- estimatr::lm_robust(Y~X)
+
+ols.res
+```
+
+You might obtain a CI such as $[1.932, 2.934]$.
+
+A common misinterpretation is to say that the true value of $\beta$ lies in the CI $[1.932, 2.934]$ with probability 0.95.
+
+This interpretation is not correct. Once the CI has been realized, both $\beta$ and the interval $[1.932, 2.934]$ are fixed. Therefore, $\mathbb P[\beta\in[1.932,2.934]]$ is either zero or one. In our example, $\mathbb P[2\in[1.932,2.934]]=1$.
+
+The probability statement becomes meaningful only when we view the confidence interval itself as a random interval and consider a repeated-sampling framework. That is, imagine repeatedly drawing new samples from the same data-generating process and constructing a confidence interval from each sample.
+
+In practice, we typically observe only one dataset and therefore obtain only one confidence interval. To see the repeated-sampling interpretation of confidence intervals, we can repeatedly draw new datasets from the same DGP.
+
+```{webr}
+CI.in <- c()
+
+set.seed(1121)
+
+for (k in 1:100) {
+  
+  n <- 200 # sample size
+  X <- runif(n) # X ~ Unif[0,1]
+  u <- rnorm(n) # u ~ Normal(0,1)
+  Y <- 2*X + u
+  
+  ols.res <- estimatr::lm_robust(Y~X)
+  
+  CI.in[k] <- ifelse(ols.res$conf.low[2]<=2 & 2<=ols.res$conf.high[2], 1, 0)
+}
+
+# The number of CI contains the true beta:
+sum(CI.in)
+```
+
+We can see that 95 out of 100 replications produce confidence intervals that cover the true value of $\beta$ .
