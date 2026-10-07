@@ -1,0 +1,114 @@
+---
+title: "Advanced Econometrics"
+author: "Yuta Okamoto"
+format: live-html
+engine: knitr
+editor: source
+
+webr:   
+  packages:     
+    - ivreg
+---
+
+{{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
+
+## $J$ Test
+
+When the model is overidentified, we learned that the $J$ test can be used to assess the overidentifying restrictions.
+
+However, failure to reject the null hypothesis that the moment restrictions are satisfied does not necessarily imply that the instruments are valid or that the IV estimator is consistent.
+
+To illustrate this point, consider the following simulation design, adapted from Sueishi (2026), \`\`On the Informativeness of Specification Tests for Estimator Validity'':
+
+$$
+Y_i = \beta X_i + u_i,\\
+X_i = Z_{1i} + Z_{2i} + v_i,\\
+u_i = 0.2 Z_{1i} + 0.2 Z_{2i} + e_i,
+$$
+
+where $\beta=1.5$. The pair $(v_i,e_i)$ is drawn from a bivariate normal distribution with mean zero, unit marginal variance, and correlation $0.5$. In addition, $Z_{1i}\sim\mathcal{N}(0,1)$, $Z_{2i}\sim\mathcal{N}(0,1)$, and $Z_{1i}$ and $Z_{2i}$ are independent.
+
+Note that the unobserved heterogeneity $u_i$ is correlated with both instruments. Hence, instruments are invalid.
+
+We generate $n=500$ observations, compute the 2SLS estimator $\hat{\beta}_{\mathtt{2sls}}$ and perform $J$ test. We repeat this exercise $200$ times and report the empirical mean of $\hat{\beta}_{\mathtt{2sls}}$ and the empirical rejection probability of the $J$ test.
+
+```{webr}
+set.seed(1121)
+
+beta_2sls <- numeric(200)
+j_reject  <- logical(200)
+
+n <- 500
+
+# ===== Monte Carlo simulation =====
+
+for (r in 1:200) {
+  
+  # ----------------------------------------------------------
+  # 1. Generate data
+  # ----------------------------------------------------------
+  
+  # Instruments 
+  Z1 <- rnorm(n)
+  Z2 <- rnorm(n)
+  
+  # (v_i, e_i)
+  v <- rnorm(n)
+  eta <- rnorm(n)
+  e <- 0.5 * v + sqrt(1 - 0.5^2) * eta
+  
+  # First stage
+  X <- Z1 + Z2 + v
+  
+  # Structural error
+  u <- 0.2 * Z1 + 0.2 * Z2 + e
+  
+  # Outcome
+  Y <-  1.5 * X + u
+  
+  dat <- data.frame(
+    Y = Y,
+    X = X,
+    Z1 = Z1,
+    Z2 = Z2
+  )
+  
+  # ----------------------------------------------------------
+  # 2. 2SLS
+  # ----------------------------------------------------------
+  
+  fit <- ivreg(
+    Y ~ X | Z1 + Z2,
+    data = dat
+  )
+  
+  beta_2sls[r] <- coef(fit)["X"]
+  
+  # ----------------------------------------------------------
+  # 3. J-test
+  # ----------------------------------------------------------
+  
+  diagnostics <- summary(
+    fit,
+    diagnostics = TRUE
+  )$diagnostics
+  
+  j_reject[r] <- diagnostics["Sargan", "p-value"] < 0.05
+}
+
+
+# ===== Results =====
+
+results <- c(
+  Mean_2SLS        = mean(beta_2sls),
+  J_Rejection_Rate = mean(j_reject)
+)
+
+round(results, 3)
+```
+
+You may find that the average 2SLS estimates is around $1.7$, which is different from the true value $\beta= 1.5$. This discrepancy arises because the instruments are invalid.
+
+However, the rejection probability of the $J$ test is only around $6.5\%$. Thus, in this example, the $J$ test has little power to detect the invalidity of the instruments.
+
+This illustrates an important limitation of the $J$ test: failure to reject the null hypothesis does not necessarily imply that your instruments are valid or that the IV estimator is consistent.
