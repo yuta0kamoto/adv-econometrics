@@ -7,3 +7,4 @@ Interactive lecture materials.
 
 -   [Confidence Intervals](confidence-intervals.qmd)
 -   [Overidentifying Restrictions Test](J-test.qmd)
+-   [Weak Instruments](weak.qmd)
