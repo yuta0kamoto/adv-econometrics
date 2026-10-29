@@ -1,0 +1,113 @@
+---
+title: "Advanced Econometrics"
+author: "Yuta Okamoto"
+format: live-html
+engine: knitr
+editor: source
+---
+
+{{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
+
+## Weak Instruments
+
+The usual normal approximation to the IV estimator may be unreliable when the instrument is weak.
+To illustrate this, consider the simple model
+
+$$
+Y_i = \beta_0 + \beta_1 X_i + u_i, \qquad
+X_i = \pi_1 Z_i + v_i, \qquad
+u_i = v_i + e_i,
+$$
+
+where $Z_i$, $v_i$, and $e_i$ are mutually independent $\mathcal N(0,1)$ random variables, and observations are i.i.d. across $i$.
+Set $\beta_0=0$ and $\beta_1=2$.
+Here $Z_i$ is a valid instrument because $\mathbb E[Z_i u_i]=0$ and $\operatorname{Cov}(Z_i,X_i)=\pi_1$, whereas $X_i$ is endogenous because $\operatorname{Cov}(X_i,u_i)=1$.
+
+The just-identified IV (2SLS) estimator of the slope is
+
+$$
+\hat\beta_{1,\mathrm{IV}}
+=\frac{\sum_{i=1}^n (Z_i-\bar Z)(Y_i-\bar Y)}
+       {\sum_{i=1}^n (Z_i-\bar Z)(X_i-\bar X)}.
+$$
+
+When $\pi_1$ is fixed and nonzero, conventional asymptotic theory gives
+
+$$
+\sqrt n(\hat\beta_{1,\mathrm{IV}}-\beta_1)
+\xrightarrow{d}\mathcal N\left(0,\frac{2}{\pi_1^2}\right).
+$$
+
+Thus, the conventional Gaussian approximation to the distribution of the estimator $\hat\beta_{1,\mathrm{IV}}$ is
+$\mathcal N\bigl(2,\,2/(n\pi_1^2)\bigr)$.
+We compare that approximation with the simulated sampling distribution for a strong instrument ($\pi_1=0.5$) and a weak instrument ($\pi_1=0.02$).
+
+```{webr}
+set.seed(1121)
+
+n <- 2000          # sample size in each replication
+B <- 1000          # number of Monte Carlo replications
+beta1 <- 2         # true slope
+pi_strong <- 0.5   # strong first stage
+pi_weak <- 0.02    # weak first stage
+
+iv_strong <- numeric(B)
+iv_weak <- numeric(B)
+
+for (b in 1:B) {
+  Z <- rnorm(n)
+  v <- rnorm(n)
+  e <- rnorm(n)
+  u <- v + e
+
+  X_strong <- pi_strong * Z + v
+  X_weak <- pi_weak * Z + v
+  Y_strong <- beta1 * X_strong + u
+  Y_weak <- beta1 * X_weak + u
+
+  Zc <- Z - mean(Z)
+  iv_strong[b] <- sum(Zc * Y_strong) / sum(Zc * X_strong)
+  iv_weak[b] <- sum(Zc * Y_weak) / sum(Zc * X_weak)
+}
+
+plot_iv_hist <- function(estimates, pi, label) {
+  normal_sd <- sqrt(2 / (n * pi^2))
+  half_width <- 5 * normal_sd
+  edges <- seq(beta1 - half_width, beta1 + half_width,
+               length.out = 41)
+  shown <- estimates >= min(edges) & estimates <= max(edges)
+  h <- hist(estimates[shown], breaks = edges, plot = FALSE)
+
+  # Normalize by ALL replications, including those outside the plot.
+  # Thus the bar heights are comparable with the Gaussian density.
+  bar_density <- h$counts / (length(estimates) * (edges[2] - edges[1]))
+  ymax <- 1.15 * max(bar_density,
+                     dnorm(beta1, mean = beta1, sd = normal_sd))
+
+  plot(0, 0, type = "n", xlim = range(edges), ylim = c(0, ymax),
+       main = paste0(label, " (pi = ", pi, ")"),
+       xlab = "IV estimate", ylab = "Density",
+       cex.main = 0.95, cex.axis = 0.85, cex.lab = 0.9)
+  rect(head(edges, -1), 0, tail(edges, -1), bar_density,
+       col = "grey80", border = "white")
+
+  xx <- seq(min(edges), max(edges), length.out = 400)
+  lines(xx, dnorm(xx, mean = beta1, sd = normal_sd),
+        col = "red", lwd = 2)
+  abline(v = beta1)
+  mtext(sprintf("%.1f%% outside displayed range", 100 * mean(!shown)),
+        side = 3, line = 0.15, cex = 0.7)
+}
+
+old_par <- par(mfrow = c(1, 2), mar = c(4, 3.5, 3, 1))
+plot_iv_hist(iv_strong, pi_strong, label = "Strong")
+plot_iv_hist(iv_weak, pi_weak, label = "Weak")
+par(old_par)
+```
+
+The bars show the Monte Carlo sampling distribution. The red curve is the conventional Gaussian approximation, and the vertical line marks the true value $\beta_1=2$.
+The horizontal scales are different in the two panels. In the weak-instrument panel, extremely large or small estimates are omitted from the displayed range; the percentage omitted is reported above the plot. 
+
+With a strong instrument, the Gaussian approximation typically describes the simulated distribution well. With a weak instrument, the finite-sample distribution can be asymmetric and heavy-tailed, so the Gaussian approximation can be misleading.
+
+*Note:* Here $\pi_1=0.02$ is held fixed. Thus, conventional asymptotic normality eventually applies as $n\to\infty$. This simulation illustrates **a poor finite-sample Gaussian approximation**, rather than the nonnormal limit obtained under local-to-zero weak-instrument asymptotics.
