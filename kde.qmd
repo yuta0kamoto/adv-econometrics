@@ -1,0 +1,221 @@
+---
+title: "Advanced Econometrics"
+subtitle: "Kernel Density Estimation"
+author: "Yuta Okamoto"
+format: live-html
+engine: knitr
+editor: source
+---
+
+{{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
+
+## Setup
+
+Let $X_1,\ldots,X_n$ be i.i.d. $\mathcal N(0,1)$. The density of interest is $f(0)$, estimated by
+
+$$
+\hat f_K(x)=\frac{1}{nh}\sum_{i=1}^n K\!\left(\frac{X_i-x}{h}\right).
+$$
+
+We compare the *uniform* and *Epanechnikov* kernels:
+
+$$
+\begin{aligned}
+K_U(u)&=\mathbf 1\{-1/2<u\leq 1/2\},\\
+K_E(u)&=\frac{3}{4\sqrt 5}\left(1-\frac{u^2}{5}\right)\mathbf 1\{|u|\leq\sqrt5\}.
+\end{aligned}
+$$
+
+For the standard normal density, $f(0)=1/\sqrt{2\pi}$ and $f^{(2)}(0)=-f(0)$. The kernel constants and AMSE-optimal bandwidth are
+
+$$
+\begin{array}{c|cc}
+K&\mu_2(K)&R(K)\\\hline
+\text{Uniform}&1/12&1\\
+\text{Epanechnikov}&1&3/(5\sqrt{5})
+\end{array}
+$$
+
+$$
+h_{\mathrm{opt},K}=\left\{\frac{f(0)R(K)}{[f^{(2)}(0)]^2\mu_2(K)^2}\right\}^{1/5}n^{-1/5}.
+$$
+
+## Density plots for one sample ($n=200$)
+
+The two plots below use the same normal sample. Each panel has one kernel estimate (solid) and the true $\mathcal N(0,1)$ density (dashed black). The horizontal and vertical scales are the same across panels.
+
+For the last question in (b), change `bandwidth_factor` from `1` to `0.5` or `2`, then re-run this same code cell. This changes the bandwidths in both panels without adding a separate sensitivity plot. The optimal bandwidth is computed for $x=0$, even though we display the entire density curve.
+
+```{webr}
+bandwidth_factor <- 1  # Try 0.5 or 2 by changing this line.
+
+set.seed(123)
+
+K_U <- function(u) as.numeric(u > -0.5 & u <= 0.5)
+K_E <- function(u) {
+  value <- 3 / (4 * sqrt(5)) * (1 - u^2 / 5)
+  value[abs(u) > sqrt(5)] <- 0
+  pmax(value, 0)
+}
+
+f0 <- dnorm(0)
+fpp0 <- -f0
+mu2 <- c(Uniform = 1/12, Epanechnikov = 1)
+RK <- c(Uniform = 1, Epanechnikov = 3/(5*sqrt(5)))
+
+h_opt <- function(n, kernel_name) {
+  unname((f0 * RK[kernel_name] /
+            (n * fpp0^2 * mu2[kernel_name]^2))^(1/5))
+}
+
+kde <- function(grid, data, bandwidth, kernel) {
+  vapply(grid, function(x) mean(kernel((data - x) / bandwidth)) /
+           bandwidth, numeric(1))
+}
+
+n_plot <- 200
+X <- rnorm(n_plot)
+
+hU <- bandwidth_factor * h_opt(n_plot, "Uniform")
+hE <- bandwidth_factor * h_opt(n_plot, "Epanechnikov")
+grid <- seq(-3, 3, length.out = 401)
+truth <- dnorm(grid)
+fitU <- kde(grid, X, hU, K_U)
+fitE <- kde(grid, X, hE, K_E)
+
+# Two panels: Uniform (left), Epanechnikov (right).
+old_par <- par(mfrow = c(1, 2), mar = c(4, 4, 2.5, 0.8))
+y_lim <- range(c(0, truth, fitU, fitE))
+
+plot(grid, truth, type = "l", lty = 2, col = "black", lwd = 2,
+     ylim = y_lim, xlab = "x", ylab = "Density",
+     main = "Uniform kernel")
+lines(grid, fitU, col = "steelblue", lwd = 2)
+abline(v = 0, lty = 3, col = "grey60")
+legend("topright", c("True", "KDE"),
+       col = c("black", "steelblue"), lty = c(2, 1), lwd = 2,
+       bty = "n", cex = 0.77)
+
+plot(grid, truth, type = "l", lty = 2, col = "black", lwd = 2,
+     ylim = y_lim, xlab = "x", ylab = "Density",
+     main = "Epanechnikov kernel")
+lines(grid, fitE, col = "firebrick", lwd = 2)
+abline(v = 0, lty = 3, col = "grey60")
+legend("topright", c("True", "KDE"),
+       col = c("black", "firebrick"), lty = c(2, 1), lwd = 2,
+       bty = "n", cex = 0.77)
+par(old_par)
+```
+
+The uniform KDE is a step function, while the Epanechnikov KDE is continuous. Halving a bandwidth generally makes the estimate more irregular; doubling it produces stronger smoothing, with a possible increase in bias.
+
+## Minimized AMSE
+
+At the optimum, the asymptotic variance is four times the squared leading bias. Therefore,
+
+$$
+\mathrm{AMSE}_K(h_{\mathrm{opt},K};0)
+=\frac54 h_{\mathrm{opt},K}^4[f^{(2)}(0)\mu_2(K)]^2.
+$$
+
+Substituting the normal density and the kernel constants gives
+
+$$
+\begin{aligned}
+\mathrm{AMSE}_U(h_{\mathrm{opt},U};0)&\simeq 0.153578\,n^{-4/5},\\
+\mathrm{AMSE}_E(h_{\mathrm{opt},E};0)&\simeq 0.144856\,n^{-4/5},\\
+\frac{\mathrm{AMSE}_E(h_{\mathrm{opt},E};0)}
+{\mathrm{AMSE}_U(h_{\mathrm{opt},U};0)}&\simeq 0.9432.
+\end{aligned}
+$$
+
+The leading pointwise MSE favors Epanechnikov by about $5.7\%$.
+
+## Monte Carlo MSE comparison ($n=2000$, $B=5000$)
+
+For each replication, draw one standard normal sample of size $n=2000$. Each kernel gets its own pointwise AMSE-optimal bandwidth. The table reports Monte Carlo MSE, and the MSE ratio is compared with the theoretical prediction.
+
+```{webr}
+set.seed(123)
+
+K_U <- function(u) as.numeric(u > -0.5 & u <= 0.5)
+K_E <- function(u) {
+  value <- 3 / (4 * sqrt(5)) * (1 - u^2 / 5)
+  value[abs(u) > sqrt(5)] <- 0
+  pmax(value, 0)
+}
+f0 <- dnorm(0)
+fpp0 <- -f0
+mu2 <- c(Uniform = 1/12, Epanechnikov = 1)
+RK <- c(Uniform = 1, Epanechnikov = 3/(5*sqrt(5)))
+h_opt <- function(n, kernel_name) {
+  unname((f0 * RK[kernel_name] /
+            (n * fpp0^2 * mu2[kernel_name]^2))^(1/5))
+}
+
+n <- 2000
+B <- 5000
+h <- c(Uniform = h_opt(n, "Uniform"),
+       Epanechnikov = h_opt(n, "Epanechnikov"))
+
+est <- matrix(NA_real_, nrow = B, ncol = 2,
+              dimnames = list(NULL, names(h)))
+for (rep in seq_len(B)) {
+  X <- rnorm(n)  # One sample per replication, shared by both kernels.
+  est[rep, "Uniform"] <- mean(K_U(X / h["Uniform"])) / h["Uniform"]
+  est[rep, "Epanechnikov"] <-
+    mean(K_E(X / h["Epanechnikov"])) / h["Epanechnikov"]
+}
+
+mc_mse <- colMeans((est - f0)^2)
+
+result <- data.frame(
+  Kernel = names(h),
+  MC_MSE = unname(mc_mse)
+)
+cat("Monte Carlo summary:\n")
+print(result, row.names = FALSE, digits = 5)
+cat(sprintf("Monte Carlo MSE E/U ratio = %.4f\n",
+            unname(mc_mse["Epanechnikov"] / mc_mse["Uniform"])))
+```
+
+The Monte Carlo MSE is expected to be smaller under Epanechnikov, with a reduction comparable to the theoretical prediction.
+
+## Normal approximation
+
+Consider the following conventional standardized statistic:
+
+$$
+Z_{n,E}=\frac{\sqrt{nh_{\mathrm{opt},E}}\{\hat f_E(0)-f(0)\}}
+{\sqrt{f(0)R(K_E)}}.
+$$
+
+At the AMSE-optimal bandwidth, its standardized bias is $-1/2$; thus $Z_{n,E}$ is asymptotically $\mathcal N(-1/2,1)$, **not** $\mathcal N(0,1)$.
+
+Run the Monte Carlo code in the previous section before running the following cell, which uses the same replications.
+
+```{webr}
+hE <- unname(h["Epanechnikov"])
+RE <- unname(RK["Epanechnikov"])
+bE <- 0.5 * hE^2 * fpp0 * mu2["Epanechnikov"]
+seE <- sqrt(f0 * RE / (n * hE))
+Z_E <- (est[, "Epanechnikov"] - f0) / seE
+predicted_center <- unname(bE / seE)
+
+cat(sprintf("Monte Carlo mean of Z = %.4f\n",
+            mean(Z_E)))
+
+hist(Z_E, breaks = 35, freq = FALSE, col = "grey85",
+     border = "white", main = "Epanechnikov",
+     xlab = "Z_n,E", ylab = "Density")
+curve(dnorm(x, mean = 0, sd = 1), add = TRUE,
+      col = "firebrick", lwd = 2)
+curve(dnorm(x, mean = predicted_center, sd = 1), add = TRUE,
+      col = "steelblue", lwd = 2, lty = 2)
+abline(v = mean(Z_E), lty = 3, col = "black", lwd = 2)
+legend("topright", c("N(0,1)", "N(-1/2,1)", "Monte Carlo mean"),
+       col = c("firebrick", "steelblue", "black"),
+       lty = c(1, 2, 3), lwd = 2, bty = "n", cex = 0.8)
+```
+
+The empirical distribution of $Z_{n,E}$ is approximately normal, but it is centered around the standardized asymptotic bias rather than zero. Consequently, conventional confidence intervals that ignore this bias may suffer from coverage distortion.
